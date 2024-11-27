@@ -138,6 +138,7 @@ earliest_start_date <- min(whatNWISdata_Filter$Begin_Date, na.rm = TRUE)
 # Or set a different date as the end date
 end_date <- as.character(Sys.Date())
 ```
+-   The first time you run this code you have to run Section 2 Steps 4 - 8 because the AZ_readNWISdv_Filter_Qual_Code.csv is too large to upload to GitHub. After the first time you run the code you can save the data to a .csv in Section 2 Step 8 and then you won't have to re-run Section 2 Step 4 in subsequent runnings of this program if you are using the same state. You can run Section 2 Step 10 on either the first run or subsequent runs if you want.
 
 -   Section 2 Step 4 takes over a hour to load, this step along with steps Section 2 Steps 5 - 8 can be skipped by downloading the AZ_readNWISdv_Filter_Qual_Code.csv from GitHub repo and then jumping to Section 2 Step 9
 
