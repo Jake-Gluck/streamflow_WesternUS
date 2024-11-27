@@ -1,0 +1,344 @@
+## Load Packages
+
+```{r}
+# https://cran.r-project.org/web/packages/dataRetrieval/vignettes/dataRetrieval.html
+# https://waterdata.usgs.gov/blog/dataretrieval/
+
+#install.packages("dataRetrieval")
+#install.packages("dplyr")
+#install.packages("lubridate")
+
+library(dplyr)
+library(dataRetrieval)
+library(lubridate)
+```
+
+## USGS AZ Streamgages
+
+-   Data source: USGS NWIS
+-   Timeframe: Full period of record
+-   Initial filtering for state, parameter, service, and stat
+
+## Section 1
+
+-   Retrieve NWIS data for a state and filter it's metadata using whatNWISdata
+
+-   key to Data names in this section:
+
+-   whatNWISdata_Filter = filtered with whatNWISdata for: state, parameter(discharge), daily value, mean, site type(stream), more than 10 years of observations, Site_Names with terms that suggest anthropogenic stream impact are removed.
+
+```{r}
+# Section 1 Step 1
+# whatNWISdata imports a table of available parameters, period of record, and count
+whatNWISdata_Filter <- dataRetrieval::whatNWISdata(stateCd = "AZ",  
+                                     # state code
+                                       parameterCd = "00060",       
+                                     # parameter = discharge (cubic ft / sec)
+                                       service = "dv",              
+                                     # daily value
+                                       statCd = "00003")            
+                                     # mean
+```
+
+-   Filter out site codes other than stream.
+
+```{r}
+# Section 1 Step 2
+# filter site type code, can't be done in whatNWISdata
+  # whatNWISdata includes:
+  #   ST-CA = stream, canal
+  #   ST-DCH = stream, ditch
+  #   ST-TS = stream, tidal stream, stream influenced by tidal fluctuations
+  #   https://maps.waterdata.usgs.gov/mapper/help/sitetype.html
+whatNWISdata_Filter <- whatNWISdata_Filter %>%
+  filter(site_tp_cd == "ST")
+```
+
+```{r}
+# Section 1 Step 3
+# remove unnecessary columns
+whatNWISdata_Filter <- whatNWISdata_Filter[,-c(1,4,7:21)] 
+```
+
+```{r}
+# Section 1 Step 4
+# changes column names
+colnames(whatNWISdata_Filter) = c('Site_Num', 'Station_Name', 'Latitude',
+                                  'Longitude', 'Begin_Date', 'End_Date', 
+                                  'Count_Num')
+```
+
+```{r}
+# Section 1 Step 5
+# filter for observations with a range greater than 10 years
+  # save result as variable Date_Range_Years
+whatNWISdata_Filter <- whatNWISdata_Filter %>%
+  mutate(Date_Range_Years = as.numeric(difftime(End_Date, Begin_Date, units = "days")) / 365.25) %>%
+  filter(Date_Range_Years > 10)
+```
+
+-   Section 1 Steps 6 - 8 Exclude streamgages whose Site_Names include terms that suggest anthropogenic impact.
+
+```{r}
+# Section 1 Step 6
+# list of terms and variations of terms to exclude from Site_Name that suggest anthropogenic stream impact  
+# these are terms that came up in whatNWISdata_Filter, more will be added
+Excluded_Terms <- c("res", "res.", "res,",
+                    "dam", "dam.", "dam,",
+                    "canal", "canal.", "canal,",
+                    "div", "div.", "div,",
+                   "channel", "channel.", "channel,", "channel)",
+                   "outlet", "outlet.", "outlet,",
+                   "pump", "pump.", "pump,",
+                   "pumping", "pumping.", "pumping,",
+                   "overflow", "overflow.", "overflow,",
+                   "wasteway", "wasteway.", "wasteway,")
+
+# Section 1 Step 7
+# creates a pattern with " | " inserted between each term to exclude 
+Excluded_Terms_Pattern <- paste(Excluded_Terms, collapse = " | ")
+
+# Section 1 Step 8
+# filter the dataframe to exclude names with the terms in the Excluded_Terms_Pattern
+whatNWISdata_Filter <- whatNWISdata_Filter %>%
+  filter(
+    !grepl(Excluded_Terms_Pattern, Station_Name, ignore.case = TRUE)
+  )
+```
+
+### Streamgages are now filtered to meet the following criteria:
+
+-   State = AZ
+-   Site type = stream
+-   At least 10 years of daily values for mean discharge
+-   Site_Names exclude terms that suggest anthropogenic impact
+
+## Section 2
+
+-   key to Data names in this section:
+
+-   readNWISdv_Filter = takes whatNWISdata_Filter data and filters it with readNWISdv, for: daily data quality code A(approved),
+
+-   readNWISdv_Filter_Valid_Years = readNWISdv_Filter also filtered to ensure each year has \>= 335 observations for mean daily discharge value and then filtered to ensure each Site_Num still has 10 total years of observations.
+
+-   Get daily values for every Site_Num using readNWISdv
+
+```{r}
+# Section 2 Step 1
+# Take the Site_Nums from whatNWISdata_Filter(remaining streamgages after filtering above with whatNWISdata) and use them to get daily mean discharge values starting at the earliest Begin_Date
+# Create a list of Site_Nums for all of the sites remaining after doing the filtering with whatNWISdata above
+site_num_list <- whatNWISdata_Filter$Site_Num
+
+# Section 2 Step 2
+# Find the earliest Begin_Date in whatNWISdata_Filter
+earliest_start_date <- min(whatNWISdata_Filter$Begin_Date, na.rm = TRUE)
+
+# Section 2 Step 3
+# Convert today's date to a string and use it as the end_date
+# Or set a different date as the end date
+end_date <- as.character(Sys.Date())
+```
+
+-   Section 2 Step 4 takes over a hour to load, this step along with steps Section 2 Steps 5 - 8 can be skipped by downloading the AZ_readNWISdv_Filter_Qual_Code.csv from GitHub repo and then jumping to Section 2 Step 9
+
+```{r}
+# Section 2 Step 4
+# Call readNWISdv for all sites, this will return all mean daily discharge values for every streamgage in the state
+# this returns 3,254,235 observations for AZ and takes between 1 and 1.5 hours to complete on my Mac
+readNWISdv_Filter <- readNWISdv(siteNumbers = site_num_list,                    # site numbers
+                                  parameterCd = "00060",                        # parameter = discharge
+                                  startDate = as.character(earliest_start_date),# start date = earliest Begin_Date in whatNWISdata_Filter
+                                  endDate = end_date,                           # end date = today or some other date
+                                  statCd = "00003")                             # stat = mean
+# Section 2 Step 5
+# get rid of variable that aren't needed
+readNWISdv_Filter <- readNWISdv_Filter [,-c(1,6:11)]
+
+# Section 2 Step 6
+# rename columns
+colnames(readNWISdv_Filter) = c('Site_Num', 'Date', 'Discharge_ft3_sec', 'Daily_Data_Qual_Code')
+
+# Section 2 Step 7
+# filter data to only include daily data quality code A for approved 
+readNWISdv_Filter <- readNWISdv_Filter %>% filter(Daily_Data_Qual_Code == "A")
+
+# Section 2 Step 8
+# save dataset to csv
+write.csv(readNWISdv_Filter, "AZ_readNWISdv_Filter_Qual_Code.csv", row.names = FALSE)
+```
+
+-   Section 2 Steps 9 and 10 Execute the chunk below (Section 2 Steps 9 and 10) only if you are using the AZ_readNWISdv_Filter_Qual_Code.csv from the GitHub repo and not downloading the data in Section 2 step 4
+
+```{r}
+# Section 2 Step 9
+# testing purposes only
+# set the working directory to where you saved AZ_readNWISdv_Filter_Qual_Code.csv from GitHub repo
+# this will be a different pathway for everyone
+setwd("/Users/jakegluck/Documents/NAU/informatics/hydro/damData/streamData");
+
+# Section 2 Step 10
+# load the csv that was saved in the line above so when program is tested
+# there is no need to wait for 1 to 1.5 hours for readNWISdv to retrieve data
+readNWISdv_Filter <- read.csv("AZ_readNWISdv_Filter_Qual_Code.csv")
+
+```
+
+```{r}
+# Section 2 Step 11
+# check if there are any NA values in the data
+# true means there are NA values in the data, false means there are not
+any(is.na(readNWISdv_Filter))
+
+# there are no NA values in readNWISdv_Filter
+```
+
+-   Section 2 Steps 12 - 14 Find years with \>= 335 observations aka valid years.
+
+```{r}
+# Section 2 Step 12
+# Extract the year from the Date column
+readNWISdv_Filter <- readNWISdv_Filter %>% 
+  mutate(Year = year(as.Date(Date)))
+
+# Section 2 Step 13
+# Group by Site_Num and Year and count observations FOR VALID YEARS!
+Valid_Years <- readNWISdv_Filter %>%
+  group_by(Site_Num, Year) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  filter(Count >= 335)
+
+# Section 2 Step 14
+# Ensure column names match between the data frames before joining
+# Join the filtered valid years back with the original data to keep only valid rows 
+readNWISdv_Filter_Valid_Years <- readNWISdv_Filter %>%
+  semi_join(Valid_Years, by = c("Site_Num", "Year"))
+```
+
+-   Section 2 Steps 15 - 21 Safety check (optional).
+-   Ensure that all daily values from valid years (\>= 335 observations) and all daily values from invalid years (\<335 observations) add up to the total amount of daily values.
+
+```{r}
+# Section 2 Step 15
+# find all years with < 335 observations aka invalid years
+# Group by Site_Num and Year and count observations FOR INVALID YEARS
+# change Valid_Years to Invalid_Years
+Invalid_Years <- readNWISdv_Filter %>%
+  group_by(Site_Num, Year) %>%
+  summarise(Count = n(), .groups = "drop") %>%
+  # switch >= to < to find invalid years
+  filter(Count < 335)
+
+# Section 2 Step 16
+# Ensure column names match between the data frames before joining
+# Join the filtered valid years back with the original data to keep only valid rows
+readNWISdv_Filter_Invalid_Years <- readNWISdv_Filter %>%
+  # change Valid_Years to Invalid_Years
+  semi_join(Invalid_Years, by = c("Site_Num", "Year"))
+
+# Ensure that the sum of the number of observations in readNWISdv_Filter_Valid_Years and 
+# readNWISdv_Filter_Invalid_Years is equal to the number of observations in readNWISdv_Filter
+
+# Count the number of observations in each dataset
+# Section 2 Step 17
+total_observations <- nrow(readNWISdv_Filter)  # Total number of observations in the original dataset
+
+# Section 2 Step 18
+valid_observations <- nrow(readNWISdv_Filter_Valid_Years)  # Valid observations (>= 335 per year)
+
+# Section 2 Step 19
+invalid_observations <- nrow(readNWISdv_Filter_Invalid_Years)  # Invalid observations (< 335 per year)
+
+# Check if the sum of valid and invalid observations equals the total number of observations
+# Section 2 Step 20
+sum_valid_invalid <- valid_observations + invalid_observations
+
+# Section 2 Step 21
+if (sum_valid_invalid == total_observations) {
+  print("The sum of valid and invalid observations matches the total number of observations.")
+} else {
+  print("There is a mismatch between the total number of observations and the sum of valid and invalid observations.")
+}
+```
+
+-   Section 2 Steps 22 - 26 Ensure that each Site_Num still has at least 10 years of total observations.
+
+```{r}
+
+# Section 2 Step 22
+# Extract the number of unique years for each Site_Num
+Years_Per_Site <- readNWISdv_Filter_Valid_Years %>%
+  group_by(Site_Num) %>%
+  summarise(Unique_Years = n_distinct(Year), .groups = "drop")
+
+# Section 2 Step 23
+# Filter Site_Nums that have at least 10 unique years
+Valid_Site_Nums <- Years_Per_Site %>%
+  filter(Unique_Years >= 10)
+
+# Section 2 Step 24
+# Join the valid Site_Nums back with readNWISdv_Filter_Valid_Years
+readNWISdv_Filter_Valid_Years <- readNWISdv_Filter_Valid_Years %>%
+  semi_join(Valid_Site_Nums, by = "Site_Num")
+
+# Section 2 Step 25
+# Count the number of unique Site_Num values in readNWISdv_Filter_Valid_Years
+num_unique_site_nums <- n_distinct(readNWISdv_Filter_Valid_Years$Site_Num)
+
+# Section 2 Step 26
+# Print the result
+cat("Number of unique Site_Num values in readNWISdv_Filter_Valid_Years: ", num_unique_site_nums, "\n")
+```
+
+-   Section 2 Steps 27 and 28 Convert discharge values from cubic feet per second to cubic meters per second
+
+```{r}
+# Section 2 Step 27
+# convert cubic feet / sec to cubic meters / sec
+conversion_factor <- 0.0283168
+
+# Section 2 Step 28
+# create new variable in readNWISdv_Filter_Valid_Years called Discharge_Meters_Per_Second
+readNWISdv_Filter_Valid_Years$Discharge_Meters_Per_Second <- readNWISdv_Filter_Valid_Years$Discharge.ft3.sec. * conversion_factor
+```
+
+-   Section 2 Steps 29 - 31 Clean data, set working directory and save data to csv.
+
+```{r}
+# Section 2 Step 29
+# get rid of columns that are not needed
+readNWISdv_Filter_Valid_Years <- readNWISdv_Filter_Valid_Years[,-c(1,4:6)]
+
+# Section 2 Step 30
+# set the working directory as desired, this is where the csv will be saved
+setwd("/Users/jakegluck/Documents/NAU/informatics/hydro/damData/streamData/NWISdata_R_Filtered")
+
+# Section 2 Step 31
+# save readNWISdv_Filter_Valid_Years to csv, make sure to include what state it is for
+write.csv(readNWISdv_Filter_Valid_Years, "AZ_NWISdata_R_Filtered.csv", row.names = FALSE)
+```
+
+-   Section 3
+-   Get coordinates for all of the Site_Nums in readNWISdv_Filter_Valid_Years and write to .csv file these coordinates can be used in ArcGIS to make a map to check if any of these streamgages are downstream of a dam.
+
+```{r}
+# Section 3 Step 1
+# get the Site_Nums from readNWISdv_Filter_Valid_Years 
+site_num_list_coordinates <- unique(readNWISdv_Filter_Valid_Years$Site_Num)
+
+# Section 3 Step 2
+# convert  whatNWISdata_Filter$Site_Num to ints to allow filtering in the next step
+whatNWISdata_Filter$Site_Num <- as.integer(whatNWISdata_Filter$Site_Num)
+
+# Section 3 Step 3
+# filter whatNWISdata_Filter to only include the Site_Nums from readNWISdv_Filter_Valid_Years
+whatNWISdata_Filter_Coordinates <- whatNWISdata_Filter %>%
+  filter(Site_Num %in% site_num_list_coordinates)
+
+# Section 3 Step 4
+# set the working directory to where you want these coordinates to be saved
+setwd("/Users/jakegluck/Documents/NAU/informatics/hydro/damData/streamData/NWISdata_R_Filtered")
+
+# Section 3 Step 5
+# save whatNWISdata_Filter_Coordinates to a .csv files, make sure to include what state it is for
+write.csv(whatNWISdata_Filter_Coordinates, "AZ_NWISdata_R_Filtered_Coordinates.csv", row.names = FALSE)
+```

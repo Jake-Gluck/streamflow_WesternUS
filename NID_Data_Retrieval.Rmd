@@ -1,0 +1,42 @@
+## Load Packages
+
+```{r}
+#install.packages("dplyr")
+
+library(dplyr)
+```
+
+-   This program downloads data from the US Army Corps of Engineers' National Inventory of Dams then filters it to show only Federal ID, Dam Name, Latitude, Longitude, County and State, and River or Stream Name for the state of your choosing.
+
+-   Download data from: <https://hub.arcgis.com/datasets/fedmaps::national-inventory-of-dams-1/explore?showTable=true>
+
+-  Save the data in a clearly labeled, easily accessible folder. 
+
+```{r}
+# set current working directory to where you just downloaded the NID data to
+setwd("/Users/jakegluck/Documents/NAU/informatics/hydro/damData/Dam")
+
+# open NID.csv
+nid <- read.csv('NID.csv')
+
+# filter to only show dams in the state that you are interested in
+nid <- nid %>%
+  filter(State == "Arizona")
+
+# remove variables that aren't needed
+nid <- nid[,c(4,6,21,22,24,27)] 
+
+# rename columns
+colnames(nid) = c('Federal_Id', 'Dam_Name', 'Latitude', 'Longitude', 'County_State', 'River_Or_Stream')
+
+# if you want the csv saved somewhere other than your current working directory
+# reset the working directory, this is where the csv will be saved
+# setwd("/Users/jakegluck/Documents/NAU/informatics/hydro/damData/Dam")
+
+# save the filtered data set to a csv
+write.csv(nid, "AZ_Dam_Coordinates.csv", row.names = FALSE)
+```
+
+-   This coordinate data can now be imported to ArcGIS as points along with the coordinate data for the filtered streamgages from NWIS_Streamgage_R_Filter.Rmd.
+
+-   
