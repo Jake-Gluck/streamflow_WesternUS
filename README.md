@@ -17,6 +17,15 @@ To download USGS National Hydrgraphy Dataset for a specific state go to https://
 
 I also found a .xlsx spreadsheet that has all of the streamgages included in the USGS Hydro-Climatic Data Network. It can be downloaded at https://water.usgs.gov/osw/hcdn-2009/ . On my web browser this pages appears to be mostly empty. Highlight the entire page to reveal the secret hidden text. Then click on the “A complete list of stations comprising HCDN-2009, along with basic attributes is given in the Excel file HCDN-2009_Station_Info.xlsx.” link to download it. I then uploaded it to Google Drive and opened it with Google Sheets. In Google Sheets go to File > Download > Comma Separated Values (.csv). Now we can look at this data in R. I haven't looked at it much yet but saw that the columns aren't labeled but the important info such as Site Number, Site Name, State, Longitutde, and Latitude are easy to figure out. 
 
+
 Perhaps with this USGS HCDN data we could include all of those streamgages in our data. We would also have to check for any streamgages that have been installed post USGS HCDN and also check the National Inventory of Dams to see if any dams have been built post USGS HCDN.
 
 Let me know what questions you have and what needs to be changed. 
+
+Update for Reservoirs_or_Diversion.Rmd
+For answering the question, "The NID dataset provides some information on the use of the dam, we may only filter out dams that serve as reservoirs as opposed to diversion dams. Is there a way to easily differentiate these uses from the NID data?", my idea is to go through the NID dataset and find the most promising attributes. Then for each attribute find the distribution for each of the values. For example, for Spillway.Type, 46% are uncontrolled, 37% have no value, 9% are controlled, and 8% have the value None. I think the biggest obstacle here will be all of the missing values. I thought Spillway.Type would be a good indicator but over one third of the observations do not have data for that attribute. 
+
+At the moment my idea is to find the attributes that could indicate if the dam impedes the flow of the river and then see what percent of those attributes are missing. If I can find a promiising attribute with a minimal amount of missing values, I could then do a random sample of dams and look it up on satellite imagery and see if it looks like it holds water. My rough idea is to do a binomial distribution where doesn't impede a river's flow is indicated with a 1 and does impede a river's flow is 0. Maybe I can make some sort of regression model that uses the different attributes to predict if a dam impedes the flow of the river or not. I'm trying to remember my last stats class but this will give me a reason to relearn it, which is a good thing. 
+
+Let me know if this sounds reasonable and or coherent.
+
