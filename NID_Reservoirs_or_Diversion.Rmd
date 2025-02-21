@@ -1,0 +1,71 @@
+# Load libraries
+```{r, message = FALSE}
+library(dplyr)
+```
+
+# Download and import NID data
+```{r DownloadAndImport}
+# download data from: 
+# https://hub.arcgis.com/datasets/fedmaps::national-inventory-of-dams-1/explore?showTable=true
+
+# set current working directory to where you just downloaded the NID data to
+setwd("/Users/jakegluck/Documents/NAU/informatics/hydro/damData/Dam")
+
+# open NID.csv
+nid <- read.csv('NID.csv')
+```
+
+# Filter the data to only keep attributes relevant to our question
+- NID Data Dictionary which gives a brief description of each attribute in the NID dataset.
+  - https://usace-cwbi-prod-il2-nld2-docs.s3-us-gov-west-1.amazonaws.com/ec51e2ba-daff-4dbe-95eb-af13b91066ba/NID%20Data%20Dictionary%202021-12-14.pdf
+- There are several attributes that could help us solve this question.
+  - Primary.Purpose
+    - Category describing the main purpose for which the reservoir is used. If more than one purpose, the most important is used.
+  - Purposes
+    - Category describing the current purpose(s) for which the reservoir is used.
+      - Debris Control
+      - Fire Protection, Stock, Or Small Farm Pond
+      - Fish and Wildlife Pond
+      - Flood Risk Reduction
+      - Grade Stabilization
+      - Hydroelectric
+      - Irrigation
+      - Navigation
+      - Recreation
+      - Tailings
+      - Water Supply
+      - Other
+  - National.Inventory.of.Dams..NID..Storage
+    - Calculated field: Maximum value of normal storage and maximum storage. Accepted as the general storage of the dam.
+  - Maximum.Storage: 
+    - Maximum storage, in acre-feet, which is defined as the total storage space in a reservoir below the maximum attainable water surface elevation, including any surcharge storage.
+  - Normal.Storage..acre.feet.
+    - Normal storage, in acre-feet, which is defined as the total storage space in a reservoir below the normal retention level, including dead and inactive storage and excluding any flood control or surcharge storage. For normally dry dams, the normal storage will be a zero value. If unknown, the value will be blank and not zero.
+  - Surface.Area..acres.
+    - Surface area, in acres, of the impoundment at its normal retention level.
+  - Spillway.Type
+    - Category describing the type of spillway.
+      - Controlled
+      - Uncontrolled
+      - None
+```{r FilterColumns}
+# keep only the relevant columns, to make the data more user friendly
+filtered_nid <- nid %>% select(Dam.Name, Latitude, Longitude, Primary.Purpose, Purposes, National.Inventory.of.Dams..NID..Storage, Maximum.Storage, Normal.Storage..acre.feet., Surface.Area..acres., Spillway.Type)
+```
+
+# Spillway type
+- According to Wikipedia,there are two main types of spillways are controlled and uncontrolled.
+
+  - A controlled spillway has mechanical structures or gates to regulate the rate of flow. This design allows nearly the full height of the dam to be used for water storage year-round, and flood waters can be released as required by opening one or more gates.
+
+  - An uncontrolled spillway, in contrast, does not have gates; when the water rises above the lip or crest of the spillway, it begins to be released from the reservoir. The rate of discharge is controlled only by the height of water above the reservoir's spillway. The fraction of storage volume in the reservoir above the spillway crest can only be used for the temporary storage of floodwater; it cannot be used as water supply storage because it sits higher than the dam can retain it.
+```{r Spillway.Type Values}
+# count the number of occurrences of each of the values in Spillway.Type
+Spillway.Type_percent <- filtered_nid %>%
+  count(Spillway.Type) %>%
+  arrange(desc(n)) %>%
+  mutate(percentage = (n / sum(n)) * 100)
+
+print(Spillway.Type_percent)
+```
+
